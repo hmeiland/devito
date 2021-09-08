@@ -8,6 +8,7 @@ from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
                                     optimize_pows, relaxing)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, linearize, mpiize,
                                optimize_halospots, hoist_prodders, relax_incr_dimensions)
+from devito.ir.clusters import analyze
 from devito.tools import timed_pass
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',
@@ -181,6 +182,8 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = cse(clusters, sregistry)
 
         # Relaxing
+        # Determine relevant computational properties (e.g., parallelism)
+        clusters = analyze(clusters)
         clusters = relaxing(clusters, options)
 
         return clusters
@@ -271,6 +274,8 @@ class Cpu64FsgOperator(Cpu64AdvOperator):
         clusters = blocking(clusters, options)
 
         # Relaxing
+        # Determine relevant computational properties (e.g., parallelism)
+        clusters = analyze(clusters)
         clusters = relaxing(clusters, options)
 
         return clusters
