@@ -225,9 +225,8 @@ def skewing(clusters, options):
            innermost loop.
 
     """
-    processed = Skewing(options).process(clusters)
 
-    return processed
+    return Skewing(options).process(clusters)
 
 
 class Skewing(Queue):
@@ -275,7 +274,6 @@ class Skewing(Queue):
         d = prefix[-1].dim
 
         processed = []
-        interchanged = []
         for c in clusters:
             if SKEWABLE not in c.properties[d]:
                 return clusters
@@ -284,7 +282,7 @@ class Skewing(Queue):
                 return clusters
 
             skew_dims = [i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]]
-            if not skew_dims or len(skew_dims) > 2:
+            if not len(skew_dims) in (1, 2):
                 return clusters
 
             # The level of a given Dimension in the hierarchy of block Dimensions, used
@@ -302,33 +300,33 @@ class Skewing(Queue):
 
             intervals = []
             for i in c.ispace:
-                # Skew at level 2 if time is blocked
-                if i.dim is d and len(skew_dims) and level(d) == skew_level + 1:
-                    intervals.append(Interval(d, skew_dim, skew_dim))
-                # Skew at level <=1 if time is not blocked
-                elif i.dim is d and not len(skew_dims) and level(d) <= skew_level:
-                    intervals.append(Interval(d, skew_dim, skew_dim))
+                if i.dim is d:
+                    # Skew at skew_level + 1 if time is blocked
+                    cond1 = skew_dims and level(d) == skew_level + 1
+                    # Skew at level <=1 if time is not blocked
+                    cond2 = not skew_dims and level(d) <= skew_level
+                    if cond1 or cond2:
+                        intervals.append(Interval(d, skew_dim, skew_dim))
+                    else:
+                        intervals.append(i)
                 else:
                     intervals.append(i)
 
-            if len(skew_dims) == 0:  # Time is not-blocked
-                new_relations = c.ispace.relations
-            elif len(skew_dims) == 1:  # Time is blocked
-                new_relations = []  # used to perform a loop interchange
-
-                # Define the new `relations` for interchange
-                for i in c.ispace.relations:
-                    if i and level(i[1]) == skew_level:
-                        new_relations.append((i[1], skew_dim))
-                        interchanged.append(i[1])
-                    else:
-                        new_relations.append(i)
-
-            # Remove `PARALLEL` property from interchanged loops. Helpful in order not to
-            # be parallelized later
             properties = dict(c.properties)
-            properties.update({i: c.properties[i] - {PARALLEL} for i in interchanged})
-            intervals = IntervalGroup(intervals, relations=new_relations)
+            if skew_dims:  # Time is blocked, interchange loops
+                relations = []
+                for i in c.ispace.relations:
+                    # Interchange and drop `PARALLEL` property
+                    if i and level(i[1]) == skew_level:
+                        relations.append((i[1], skew_dim))
+                        properties.update({i[1]: c.properties[i[1]] - {PARALLEL}})
+                    else:
+                        relations.append(i)
+            else:  # Time is not-blocked, leave it as is
+                relations = c.ispace.relations
+
+            intervals = IntervalGroup(intervals, relations)
+
             ispace = IterationSpace(intervals, c.ispace.sub_iterators,
                                     c.ispace.directions)
 
