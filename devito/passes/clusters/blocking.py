@@ -345,7 +345,6 @@ class Skewing(Queue):
                 relations = c.ispace.relations
 
             intervals = IntervalGroup(intervals, relations)
-
             ispace = IterationSpace(intervals, c.ispace.sub_iterators,
                                     c.ispace.directions)
 
