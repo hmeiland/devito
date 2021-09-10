@@ -4,6 +4,7 @@ from devito.ir import (Forward, List, Prodder, FindNodes, Transformer,
                        filter_iterations, retrieve_iteration_tree)
 from devito.logger import warning
 from devito.passes.iet.engine import iet_pass
+from devito.passes.clusters.utils import level
 from devito.symbolics import MIN, MAX
 from devito.tools import is_integer, split
 
@@ -98,9 +99,6 @@ def relax_incr_dimensions(iet, **kwargs):
 
         # Get the dimension to skewed. 0 if not applicable
         skew_dim = (inner[0].dim if inner[0].dim.is_Time else 0)
-
-        # The level of a given Dimension in the hierarchy of block Dimensions
-        level = lambda dim: len([j for j in dim._defines if j.is_Incr])
 
         # Process inner iterations and adjust their bounds
         for n, i in enumerate(inner):

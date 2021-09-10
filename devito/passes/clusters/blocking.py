@@ -3,6 +3,7 @@ from collections import Counter
 from devito.ir.clusters import Queue
 from devito.ir.support import (SEQUENTIAL, PARALLEL, SKEWABLE, TILABLE, Interval,
                                IntervalGroup, IterationSpace)
+from devito.passes.clusters.utils import level
 from devito.symbolics import uxreplace, retrieve_indexed
 from devito.types import IncrDimension
 
@@ -182,9 +183,6 @@ def decompose(ispace, d, block_dims, mode='parallel'):
     for r in ispace.intervals.relations:
         relations.append([block_dims[0] if i is d else i for i in r])
 
-    # The level of a given Dimension in the hierarchy of block Dimensions
-    level = lambda dim: len([i for i in dim._defines if i.is_Incr])
-
     # Add more relations
     for n, i in enumerate(ispace):
         if i.dim is d:
@@ -196,7 +194,7 @@ def decompose(ispace, d, block_dims, mode='parallel'):
             # should result in `(tbb, tb, t, xbb, xb, x, ybb, ...)` rather than
             # `(tbb, xbb, ybb, tb, xb, yb, b, x, y)`
             for bd in block_dims:
-                if mode == 'sequential' or level(i.dim) >= level(bd):
+                if level(i.dim) >= level(bd) or mode == 'sequential':
                     relations.append([bd, i.dim])
                 else:
                     relations.append([i.dim, bd])
@@ -238,7 +236,6 @@ def skewing(clusters, options):
            innermost loop.
 
     """
-
     return Skewing(options).process(clusters)
 
 
@@ -310,10 +307,6 @@ class Skewing(Queue):
             skew_dims = [i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]]
             if not len(skew_dims) in (1, 2):
                 return clusters
-
-            # The level of a given Dimension in the hierarchy of block Dimensions, used
-            # to skew over the outer level of loops.
-            level = lambda dim: len([i for i in dim._defines if i.is_Incr])
 
             # Retrieve skewing factor
             sf = self.get_skewing_factor(c) # noqa
