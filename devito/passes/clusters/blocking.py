@@ -25,6 +25,21 @@ def blocking(clusters, options):
            innermost loop.
         * `blocklevels` (int, 1): 1 => classic loop blocking; 2 for two-level
            hierarchical blocking.
+
+    Example
+    -------
+        * A typical use case, e.g.
+
+          .. code-block::
+                            Classical   +blockinner  2-level Hierarchical
+
+            for x            for xb        for xb         for xbb
+              for y    -->    for yb        for yb         for ybb
+                for z          for x         for zb         for xb
+                                for y         for x          for yb
+                                 for z         for y          for x
+                                                for z          for y
+                                                                for z
     """
     processed = preprocess(clusters, options)
 
@@ -79,7 +94,6 @@ class Blocking(Queue):
         block_dims = [bd]
 
         levels = (self.levels if not d.is_Time else 1)
-
         for i in range(1, levels):
             bd = IncrDimension(name % i, bd, bd, bd + bd.step - 1, size=size)
             block_dims.append(bd)
@@ -97,8 +111,7 @@ class Blocking(Queue):
                 # Use the innermost IncrDimension in place of `d`
                 exprs = [uxreplace(e, {d: bd}) for e in c.exprs]
 
-                # The new Cluster properties
-                # TILABLE property is dropped after the blocking.
+                # After blocking, TILABLE is dropped from the new Cluster properties
                 properties = dict(c.properties)
                 properties.pop(d)
                 properties.update({bd: c.properties[d] - {TILABLE} for bd in block_dims})
@@ -179,7 +192,7 @@ def decompose(ispace, d, block_dims, mode='parallel'):
         elif i.dim.is_Incr:
             # Make sure IncrDimensions on the same level stick next to each other.
             # For example, we want `(t, xbb, ybb, xb, yb, x, y)`, rather than say
-            # `(t, xbb, xb, x, ybb, ...)`. In sequential blocking IncrDimensions
+            # `(t, xbb, xb, x, ybb, ...)`. In sequential blocking, IncrDimensions
             # should result in `(tbb, tb, t, xbb, xb, x, ybb, ...)` rather than
             # `(tbb, xbb, ybb, tb, xb, yb, b, x, y)`
             for bd in block_dims:
@@ -221,7 +234,7 @@ def skewing(clusters, options):
         Input Clusters, subject of the optimization pass.
     options : dict
         The optimization options.
-        * `blockinner` (boolean, False): enable/disable loop skewing along the
+        * `skewinner` (boolean, False): enable/disable loop skewing along the
            innermost loop.
 
     """
@@ -244,7 +257,8 @@ class Skewing(Queue):
     .. [1] Wolfe, Michael. "Loops skewing: The wavefront method revisited."
     International Journal of Parallel Programming 15.4 (1986): 279-293.
 
-    Examples:
+    Example (Skewing)
+    -----------------
 
     .. code-block:: python
 
@@ -259,6 +273,18 @@ class Skewing(Queue):
         for i = 2, n-1
             for j = 2+i, m-1+i
                 a[i,j-i] = (a[a-1,j-i] + a[i,j-1-i] + a[i+1,j-i] + a[i,j+1-i]) / 4
+
+
+    Example (Loop Interchange)
+    --------------------------
+
+          .. code-block::
+
+            for tb       for tb
+             for t        for xb (+skewed bounds)
+              for xb  -->  for t
+               for x        for x (+skewed bounds)
+                for y        for y
 
     """
 
@@ -322,7 +348,7 @@ class Skewing(Queue):
                         properties.update({i[1]: c.properties[i[1]] - {PARALLEL}})
                     else:
                         relations.append(i)
-            else:  # Time is not-blocked, leave it as is
+            else:  # Time is not-blocked, remains as is
                 relations = c.ispace.relations
 
             intervals = IntervalGroup(intervals, relations)
