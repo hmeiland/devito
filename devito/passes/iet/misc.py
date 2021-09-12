@@ -130,10 +130,12 @@ def relax_incr_dimensions(iet, **kwargs):
             iter_max = evalmin(symbolic_max, root_max)
             mapper[i] = i._rebuild(limits=(symbolic_min, iter_max, i.step))
 
-        for i in outer:
-            if skew_dim and skew_dim.parent is not i.dim:
-                mapper[i] = i._rebuild(limits=(i.symbolic_min, i.symbolic_max +
-                                       skew_dim.parent.symbolic_size, i.step))
+        # Process outer iterations and adjust their bounds (skewing only)
+        if skew_dim:
+            for i in outer:
+                if skew_dim.parent is not i.dim:
+                    mapper[i] = i._rebuild(limits=(i.symbolic_min, i.symbolic_max +
+                                           skew_dim.parent.symbolic_size, i.step))
 
     if mapper:
         iet = Transformer(mapper, nested=True).visit(iet)
