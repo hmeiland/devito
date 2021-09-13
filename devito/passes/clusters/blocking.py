@@ -309,7 +309,7 @@ class Skewing(Queue):
                 return clusters
 
             # Retrieve skewing factor
-            sf = self.get_skewing_factor(c) # noqa
+            sf = self.get_skewing_factor(c)  # noqa
 
             # Here, prefix is skewable and nested under a SEQUENTIAL loop. Pop skew dim.
             skew_dim = skew_dims.pop()
@@ -324,8 +324,12 @@ class Skewing(Queue):
                     cond1 = skew_dims and level(d) == skew_level + 1
                     # Skew at level <=1 if time is not blocked
                     cond2 = not skew_dims and level(d) <= skew_level
+                    cond3 = skew_dims and level(d) == skew_level
                     if cond1 or cond2:
                         intervals.append(Interval(d, skew_dim, skew_dim))
+                    elif cond3:
+                        intervals.append(Interval(d, 0,
+                                         sf*(skew_dim.parent.symbolic_size)))
                     else:
                         intervals.append(i)
                 else:

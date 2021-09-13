@@ -90,6 +90,8 @@ def relax_incr_dimensions(iet, **kwargs):
         outer, inner = split(iterations, lambda i: not i.dim.parent.is_Incr)
 
         # Get root's `symbolic_max` out of each outer Dimension
+        roots_dim_max = {i.dim.root: i.dim.symbolic_max for i in outer}
+        roots_dim_min = {i.dim.root: i.dim.symbolic_min for i in outer}
         roots_max = {i.dim.root: i.symbolic_max for i in outer}
         roots_min = {i.dim.root: i.symbolic_min for i in outer}
 
@@ -117,7 +119,7 @@ def relax_incr_dimensions(iet, **kwargs):
             symbolic_min = i.symbolic_min
 
             if skew_dim and skew_dim is not i.dim:
-                root_max = roots_max[i.dim.root] + skew_dim
+                root_max = roots_dim_max[i.dim.root] + skew_dim
                 if level(i.dim) == 2:  # At skewing level
                     symbolic_max = i.dim.symbolic_max
                     root_min = roots_min[i.dim.root] + i.symbolic_min - i.dim.symbolic_min
@@ -131,11 +133,11 @@ def relax_incr_dimensions(iet, **kwargs):
             mapper[i] = i._rebuild(limits=(symbolic_min, iter_max, i.step))
 
         # Process outer iterations and adjust their bounds (skewing only)
-        if skew_dim:
-            for i in outer:
-                if skew_dim.parent is not i.dim:
-                    mapper[i] = i._rebuild(limits=(i.symbolic_min, i.symbolic_max +
-                                           skew_dim.parent.symbolic_size, i.step))
+        #if skew_dim:
+        #    for i in outer:
+        #        if skew_dim.parent is not i.dim:
+        #            mapper[i] = i._rebuild(limits=(i.symbolic_min, i.symbolic_max +
+        #                                   skew_dim.parent.symbolic_size, i.step))
 
     if mapper:
         iet = Transformer(mapper, nested=True).visit(iet)
