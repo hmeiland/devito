@@ -214,6 +214,12 @@ def decompose(ispace, d, block_dims, mode='parallel'):
     sub_iterators.update({bd: ispace.sub_iterators.get(d, []) for bd in block_dims})
     if mode == 'sequential':
         sub_iterators.update({bd: () for bd in block_dims[:-1]})
+        new_subs = []
+        for i in sub_iterators[block_dims[-1]]:
+            if i.is_Modulo:
+                new_subs.append(i.rebuild(parent=block_dims[-1]))
+
+        sub_iterators.update({block_dims[-1]: tuple(new_subs)})
 
     directions = dict(ispace.directions)
     directions.pop(d)
