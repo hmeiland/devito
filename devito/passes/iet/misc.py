@@ -1,10 +1,10 @@
 import cgen
 
 from devito.ir import (Forward, List, Prodder, FindNodes, Transformer,
-                       filter_iterations, retrieve_iteration_tree)
+                       filter_iterations, retrieve_iteration_tree, AFFINE, SEQUENTIAL)
 from devito.logger import warning
 from devito.passes.iet.engine import iet_pass
-from devito.passes.clusters.utils import level
+from devito.passes.clusters.utils import blevel
 from devito.symbolics import MIN, MAX
 from devito.tools import is_integer, split
 
@@ -89,9 +89,8 @@ def relax_incr_dimensions(iet, **kwargs):
         assert all(i.direction is Forward for i in iterations)
         outer, inner = split(iterations, lambda i: not i.dim.parent.is_Incr)
 
-        # Get root's `symbolic_max` out of each outer Dimension
+        # Get root's `symbolic_max` and `dim.symbolic_max` out of each outer Dimension
         roots_dim_max = {i.dim.root: i.dim.symbolic_max for i in outer}
-        roots_dim_min = {i.dim.root: i.dim.symbolic_min for i in outer}
         roots_max = {i.dim.root: i.symbolic_max for i in outer}
         roots_min = {i.dim.root: i.symbolic_min for i in outer}
 
@@ -100,7 +99,7 @@ def relax_incr_dimensions(iet, **kwargs):
         proc_parents_max = {}
 
         # Get the skew dimension. 0 if not applicable
-        skew_dim = (inner[0].dim if inner[0].dim.is_Time else 0)
+        skew_dim = (inner[0].dim if inner[0].properties == (AFFINE, SEQUENTIAL) else 0)
 
         # Process inner iterations and adjust their bounds
         for i in inner:
@@ -120,11 +119,11 @@ def relax_incr_dimensions(iet, **kwargs):
 
             if skew_dim and skew_dim is not i.dim:
                 root_max = roots_dim_max[i.dim.root] + skew_dim
-                if level(i.dim) == 2:  # At skewing level
+                if blevel(i.dim) == 2:  # At skewing level
                     root_min = roots_min[i.dim.root] + skew_dim
                     symbolic_min = evalmax(root_min, i.dim.symbolic_min)
                     symbolic_max = i.dim.symbolic_max
-                elif level(i.dim) > 2:  # In TB, multiple levels need parent symbolic_max
+                elif blevel(i.dim) > 2:  # In TB, multiple levels need parent symbolic_max
                     symbolic_max = evalmin(proc_parents_max[i.dim.parent], symbolic_max)
 
                 proc_parents_max[i.dim] = symbolic_max
@@ -167,6 +166,7 @@ def is_on_device(obj, gpu_fit):
 
 def evalmin(a, b):
     """
+    Simplify min(a, b) expressions if possible
     """
     try:
         bool(min(a, b))  # Can it be evaluated?
@@ -177,6 +177,7 @@ def evalmin(a, b):
 
 def evalmax(a, b):
     """
+    Simplify max(a, b) if possible
     """
     try:
         bool(max(a, b))  # Can it be evaluated?
