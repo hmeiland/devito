@@ -2,12 +2,12 @@ from collections import Counter
 
 from devito.ir.clusters import Queue
 from devito.ir.support import (SEQUENTIAL, PARALLEL, SKEWABLE, TILABLE, Interval,
-                               IntervalGroup, IterationSpace)
+                               IntervalGroup, IterationSpace, AFFINE)
 from devito.passes.clusters.utils import blevel
 from devito.symbolics import uxreplace, retrieve_indexed
 from devito.types import IncrDimension
 
-from devito.symbolics import xreplace_indices
+from devito.symbolics import xreplace_indices, INT
 
 __all__ = ['blocking', 'skewing']
 
@@ -243,7 +243,8 @@ def skewing(clusters, options):
            innermost loop.
 
     """
-    return Skewing(options).process(clusters)
+    processed = Skewing(options).process(clusters)
+    return processed
 
 
 class Skewing(Queue):
@@ -305,68 +306,115 @@ class Skewing(Queue):
 
         processed = []
         for c in clusters:
-            if SKEWABLE not in c.properties[d]:
-                return clusters
 
             if d is c.ispace[-1].dim and not self.skewinner:
+                return clusters
+
+            if (SKEWABLE not in c.properties[d] and
+               not c.properties[d] == {SEQUENTIAL, AFFINE}):
                 return clusters
 
             skew_dims = [i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]]
             if not len(skew_dims) in (1, 2):
                 return clusters
 
-            # Retrieve skewing factor
-            sf = self.get_skewing_factor(c)  # noqa
-
             # Here, prefix is skewable and nested under a SEQUENTIAL loop. Pop skew dim.
             skew_dim = skew_dims.pop()
 
             # Helper variable to define the number of block levels between time loops
-            skew_level = 1
+            skewlevel = 1
 
-            intervals = []
-            sub_iterators = dict(c.ispace.sub_iterators)
-            for i in c.ispace:
-                if i.dim is d:
-                    # Skew at skew_level + 1 if time is blocked
-                    cond1 = skew_dims and blevel(d) == skew_level + 1
-                    # Skew at level <=1 if time is not blocked
-                    cond2 = not skew_dims and blevel(d) <= skew_level
-                    cond3 = skew_dims and blevel(d) == skew_level
-                    if cond1 or cond2:
-                        intervals.append(Interval(d, skew_dim, skew_dim))
-                    elif cond3:
-                        intervals.append(Interval(d, 0,
-                                         sf*(skew_dim.parent.symbolic_size)))
-                    else:
-                        intervals.append(i)
-                else:
-                    intervals.append(i)
-
-            properties = dict(c.properties)
-            if skew_dims:  # Time is blocked, interchange loops
-                relations = []
-                for i in c.ispace.relations:
-                    # Interchange and drop `PARALLEL` property
-                    if i and blevel(i[1]) == skew_level:
-                        relations.append((i[1], skew_dim))
-                        properties.update({i[1]: c.properties[i[1]] - {PARALLEL}})
-                    else:
-                        relations.append(i)
-            else:  # Time is not-blocked, remains as is
+            if c.properties[d] == {SEQUENTIAL, AFFINE}:
+                sub_iterators = self.factor_skewing(c, c.ispace, d, skew_dims,
+                                                    skew_dim, skewlevel)
+                intervals = c.ispace.intervals
                 relations = c.ispace.relations
+                properties = dict(c.properties)
+                exprs = c.exprs
+                # processed.append(c)
+            else:
+                intervals = self.skew_intervals(c, d, skew_dims, skew_dim, skewlevel)
+                relations, properties = self.interchange(c, d, skew_dims, skew_dim,
+                                                         skewlevel)
+                exprs = xreplace_indices(c.exprs, {d: d - skew_dim})
+                sub_iterators = dict(c.ispace.sub_iterators)
 
             intervals = IntervalGroup(intervals, relations)
             ispace = IterationSpace(intervals, sub_iterators,
                                     c.ispace.directions)
 
-            exprs = xreplace_indices(c.exprs, {d: d - skew_dim})
             processed.append(c.rebuild(exprs=exprs, ispace=ispace,
                                        properties=properties))
 
         return processed
 
-    def get_skewing_factor(self, cluster):
-        functs = retrieve_indexed(cluster.exprs)
-        functions = {i.function for i in functs}
-        return int(max([i.space_order for i in functions])/2)
+    def skew_intervals(self, c, d, skew_dims, skew_dim, skewlevel):
+
+        # Retrieve skewing factor
+        sf = get_skewing_factor(c)
+
+        intervals = []
+        for i in c.ispace:
+            if i.dim is d:
+                # Skew at skewlevel + 1 if time is blocked
+                cond1 = skew_dims and blevel(d) == skewlevel + 1
+                # Skew at level <=1 if time is not blocked
+                cond2 = not skew_dims and blevel(d) <= skewlevel
+                cond3 = skew_dims and blevel(d) == skewlevel
+                if cond1 or cond2:
+                    intervals.append(Interval(d, skew_dim, skew_dim))
+                elif cond3:
+                    intervals.append(Interval(d, 0,
+                                     sf*(skew_dim.parent.symbolic_size)))
+                else:
+                    intervals.append(i)
+            else:
+                intervals.append(i)
+
+        return intervals
+
+    def interchange(self, c, d, skew_dims, skew_dim, skewlevel):
+
+        properties = dict(c.properties)
+        if skew_dims:  # Time is blocked, interchange loops
+            relations = []
+            for i in c.ispace.relations:
+                # Interchange and drop `PARALLEL` property
+                if i and blevel(i[1]) == skewlevel:
+                    relations.append((i[1], skew_dim))
+                    properties.update({i[1]: c.properties[i[1]] - {PARALLEL}})
+                else:
+                    relations.append(i)
+        else:  # Time is not-blocked, remains as is
+            relations = c.ispace.relations
+
+        return relations, properties
+
+    def factor_skewing(self, c, ispace, d, skew_dims, skew_dim, skewlevel):
+
+        # Retrieve skewing factor
+        sf = get_skewing_factor(c)
+        sub_iterators = dict(ispace.sub_iterators)
+        for i in ispace:
+            if i.dim is d and i.dim is skew_dim:
+                new_subs = []
+                for s in ispace.sub_iterators[d]:
+                    if s.is_Modulo and sf > 1:
+                        addition = s.offset - skew_dim
+                        snew = s.rebuild(offset=(i.dim/INT(sf) %
+                                         skew_dim.root.symbolic_max)
+                                         + addition)
+                        new_subs.append(snew)
+                    else:
+                        new_subs.append(s)
+                sub_iterators.update({d: tuple(new_subs)})
+
+        return sub_iterators
+
+
+def get_skewing_factor(cluster):
+    functs = retrieve_indexed(cluster.exprs)
+    functions = {i.function for i in functs}
+    sf = int(max([i.space_order for i in functions])/2)
+    # assert sf != 0
+    return (sf if sf else 1)

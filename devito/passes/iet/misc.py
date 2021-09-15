@@ -100,6 +100,8 @@ def relax_incr_dimensions(iet, **kwargs):
 
         # Get the skew dimension. 0 if not applicable
         skew_dim = (inner[0].dim if inner[0].properties == (AFFINE, SEQUENTIAL) else 0)
+        # skew_dims = {i.dim for i in iterations if i.properties == (AFFINE, SEQUENTIAL)}
+        # skew_dim = (skew_dims.pop() if skew_dims else 0)
 
         # Process inner iterations and adjust their bounds
         for i in inner:
