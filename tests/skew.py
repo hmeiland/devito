@@ -8,7 +8,7 @@ import numpy as np
 nx = 64
 ny = 64
 nz = 64
-nt = 35
+nt = 38
 nu = .5
 dx = 2. / (nx - 1)
 dy = 2. / (ny - 1)

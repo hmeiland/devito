@@ -218,7 +218,9 @@ def decompose(ispace, d, block_dims, mode='parallel'):
         new_subs = []
         for i in sub_iterators[block_dims[-1]]:
             if i.is_Modulo:
-                new_subs.append(i.rebuild(parent=block_dims[-1]))
+                add = i.offset - d
+                new_subs.append(i.rebuild(parent=block_dims[-1],
+                                offset=(block_dims[-1] + add)))
 
         sub_iterators.update({block_dims[-1]: tuple(new_subs)})
 
@@ -325,14 +327,15 @@ class Skewing(Queue):
             skewlevel = 1
 
             if c.properties[d] == {SEQUENTIAL, AFFINE}:
-                sub_iterators = self.factor_skewing(c, c.ispace, d, skew_dims,
-                                                    skew_dim, skewlevel)
-                intervals = c.ispace.intervals
+                sub_iterators, intervals = self.factor_skewing(c, c.ispace, d, skew_dims,
+                                                               skew_dim, skewlevel)
+                # intervals = c.ispace.intervalss
                 relations = c.ispace.relations
                 properties = dict(c.properties)
                 exprs = c.exprs
                 # processed.append(c)
-            else:
+            elif SKEWABLE in c.properties[d]:
+
                 intervals = self.skew_intervals(c, d, skew_dims, skew_dim, skewlevel)
                 relations, properties = self.interchange(c, d, skew_dims, skew_dim,
                                                          skewlevel)
@@ -395,6 +398,7 @@ class Skewing(Queue):
         # Retrieve skewing factor
         sf = get_skewing_factor(c)
         sub_iterators = dict(ispace.sub_iterators)
+        intervals = []
         for i in ispace:
             if i.dim is d and i.dim is skew_dim:
                 new_subs = []
@@ -407,9 +411,20 @@ class Skewing(Queue):
                         new_subs.append(snew)
                     else:
                         new_subs.append(s)
-                sub_iterators.update({d: tuple(new_subs)})
 
-        return sub_iterators
+                sub_iterators.update({d: tuple(new_subs)})
+                if not skew_dims:
+                    intervals.append(Interval(d, 0,
+                                     (sf-1)*(skew_dim.root.symbolic_max)))
+                else:
+                    intervals.append(i)
+            elif i.dim is d and i.dim is skew_dim.parent:
+                intervals.append(Interval(d, 0,
+                                 (sf-1)*(skew_dim.root.symbolic_max)))
+            else:
+                intervals.append(i)
+
+        return sub_iterators, intervals
 
 
 def get_skewing_factor(cluster):
