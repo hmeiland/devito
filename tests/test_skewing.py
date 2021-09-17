@@ -296,13 +296,13 @@ class TestSkewingCorrectness(object):
         op2.apply(time_M=time_M, dt=dt)
         assert np.isclose(norm(u), norm_u, atol=1e-3, rtol=0)
 
-    @pytest.mark.parametrize('so', [(2), (4),
-                             (8), (16)])
-    def test_correctness_III(self, so):
-        nx = 36
-        ny = 36
-        nz = 36
-        nt = 67
+    @pytest.mark.parametrize('so, shape, nt',
+                             [(2, (35, 35, 35), 54), (2, (35, 35, 35), 63),
+                              (4, (38, 38, 38), 66), (4, (38, 38, 38), 101),
+                              (8, (27, 25, 42), 16), (16, (35, 35, 35), 19)])
+    def test_correctness_III(self, so, shape, nt):
+        nx, ny, nz = shape
+        nt = nt
         nu = .5
         dx = 2. / (nx - 1)
         dy = 2. / (ny - 1)
@@ -310,8 +310,8 @@ class TestSkewingCorrectness(object):
         sigma = .25
         dt = sigma * dx * dz * dy / nu
 
-        # Initialise u with hat function
-        init_value = 50
+        # Initialise u
+        init_value = 10
 
         # Field initialization
         grid = Grid(shape=(nx, ny, nz))
@@ -323,12 +323,11 @@ class TestSkewingCorrectness(object):
         x, y, z = grid.dimensions
         stencil = solve(eq, u.forward)
         eq0 = Eq(u.forward, stencil)
-        time_M = nt
 
         op = Operator(eq0, opt=('advanced', {'openmp': True,
                                 'wavefront': False, 'blocklevels': 2}))
 
-        op.apply(time_M=time_M, dt=dt)
+        op.apply(time_M=nt, dt=dt)
         norm_u = norm(u)
 
         u.data[:] = init_value
@@ -336,5 +335,5 @@ class TestSkewingCorrectness(object):
         op2 = Operator(eq0, opt=('advanced', {'openmp': True,
                                               'wavefront': True, 'blocklevels': 2}))
 
-        op2.apply(time_M=time_M, dt=dt)
-        assert np.isclose(norm(u), norm_u, atol=1e-4, rtol=0)
+        op2.apply(time_M=nt, dt=dt)
+        assert np.isclose(norm(u), norm_u, atol=1e-3, rtol=0)
