@@ -1,8 +1,7 @@
 from collections import Counter
 
-from devito.ir.clusters import Queue
-from devito.ir.support import (SEQUENTIAL, PARALLEL, SKEWABLE, TILABLE, Interval,
-                               IntervalGroup, IterationSpace, AFFINE)
+from devito.ir import (SEQUENTIAL, PARALLEL, SKEWABLE, TILABLE, Interval,
+                       Queue, IntervalGroup, IterationSpace, AFFINE)
 from devito.passes.clusters.utils import level
 from devito.symbolics import uxreplace, retrieve_indexed, xreplace_indices, INT
 from devito.types import IncrDimension
@@ -217,7 +216,7 @@ def decompose(ispace, d, block_dims, mode='parallel'):
         new_subs = []
         for i in sub_iterators[block_dims[1]]:
             if i.is_Modulo:
-                new_subs.append(i.rebuild(parent=block_dims[1],
+                new_subs.append(i.func(parent=block_dims[1],
                                 offset=(block_dims[1] + i.offset - d)))
 
         sub_iterators.update({block_dims[1]: tuple(new_subs)})
@@ -307,11 +306,11 @@ class Skewing(Queue):
         processed = []
         for c in clusters:
 
-            if d is c.ispace[-1].dim and not self.skewinner:
-                return clusters
-
             if (SKEWABLE not in c.properties[d] and
                not c.properties[d] == {SEQUENTIAL, AFFINE}):
+                return clusters
+
+            if d is c.ispace[-1].dim and not self.skewinner:
                 return clusters
 
             seq_dims = [i.dim for i in c.ispace if SEQUENTIAL in c.properties[i.dim]]
@@ -447,8 +446,8 @@ class Skewing(Queue):
                 # Rebuild ModuloDimensions to update their parent with skew_dim
                 for s in c.ispace.sub_iterators[d]:
                     if s.is_Modulo and sf > 1:
-                        snew = s.rebuild(offset=(i.dim/INT(sf))
-                                         + s.offset - skew_dim)
+                        snew = s.func(offset=(i.dim/INT(sf))
+                                      + s.offset - skew_dim)
                         new_subs.append(snew)
                     else:
                         new_subs.append(s)
