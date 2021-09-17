@@ -4,10 +4,8 @@ from devito.ir.clusters import Queue
 from devito.ir.support import (SEQUENTIAL, PARALLEL, SKEWABLE, TILABLE, Interval,
                                IntervalGroup, IterationSpace, AFFINE)
 from devito.passes.clusters.utils import level
-from devito.symbolics import uxreplace, retrieve_indexed
+from devito.symbolics import uxreplace, retrieve_indexed, xreplace_indices, INT
 from devito.types import IncrDimension
-
-from devito.symbolics import xreplace_indices, INT
 
 __all__ = ['blocking', 'skewing']
 
@@ -449,8 +447,7 @@ class Skewing(Queue):
                 # Rebuild ModuloDimensions to update their parent with skew_dim
                 for s in c.ispace.sub_iterators[d]:
                     if s.is_Modulo and sf > 1:
-                        snew = s.rebuild(offset=(i.dim/INT(sf) %
-                                         skew_dim.root.symbolic_max)
+                        snew = s.rebuild(offset=(i.dim/INT(sf))
                                          + s.offset - skew_dim)
                         new_subs.append(snew)
                     else:

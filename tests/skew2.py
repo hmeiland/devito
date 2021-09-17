@@ -1,14 +1,11 @@
 from devito import Grid, Dimension, Eq, Function, TimeFunction, Operator, solve # noqa
-from devito.ir import Iteration, FindNodes
-
 from matplotlib.pyplot import pause # noqa
-import matplotlib.pyplot as plt
 import numpy as np
 
-nx = 80
-ny = 80
-nz = 80
-nt = 36
+nx = 40
+ny = 40
+nz = 40
+nt = 16
 nu = .5
 dx = 2. / (nx - 1)
 dy = 2. / (ny - 1)
@@ -21,7 +18,7 @@ init_value = 50
 
 # Field initialization
 grid = Grid(shape=(nx, ny, nz))
-u = TimeFunction(name='u', grid=grid, space_order=4)
+u = TimeFunction(name='u', grid=grid, space_order=8)
 u.data[:, :, :] = init_value
 
 # Create an equation with second-order derivatives

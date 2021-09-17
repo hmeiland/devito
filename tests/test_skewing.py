@@ -296,12 +296,13 @@ class TestSkewingCorrectness(object):
         op2.apply(time_M=time_M, dt=dt)
         assert np.isclose(norm(u), norm_u, atol=1e-3, rtol=0)
 
-    @pytest.mark.parametrize('so, exp', [(2, 10562.1045), (4, 10482.382)])
-    def test_correctness_III(self, so, exp):
+    @pytest.mark.parametrize('so', [(2), (4),
+                             (8), (16)])
+    def test_correctness_III(self, so):
         nx = 36
         ny = 36
         nz = 36
-        nt = 66
+        nt = 67
         nu = .5
         dx = 2. / (nx - 1)
         dy = 2. / (ny - 1)
@@ -336,4 +337,4 @@ class TestSkewingCorrectness(object):
                                               'wavefront': True, 'blocklevels': 2}))
 
         op2.apply(time_M=time_M, dt=dt)
-        assert np.isclose(norm(u), norm_u, atol=1e-3, rtol=0)
+        assert np.isclose(norm(u), norm_u, atol=1e-4, rtol=0)
